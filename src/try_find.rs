@@ -1,8 +1,6 @@
 use std::ops::Try;
 
-pub trait TryFindExt<E>: Iterator {
-    type Result: Try<Ok = Option<Self::Item>, Error = E>;
-
+pub trait TryFindExt<Tryable: Try<Ok = Option<Self::Item>>>: Iterator {
     /// Applies function to the elements of iterator and returns
     /// the first non-none result or the first error.
     ///
@@ -24,10 +22,10 @@ pub trait TryFindExt<E>: Iterator {
     /// let result = a.iter().try_find(|&&s| is_my_num(s, 5));
     /// assert!(result.is_err());
     /// ```
-    fn try_find<F, R>(&mut self, mut f: F) -> Self::Result
+    fn try_find<F, R>(&mut self, mut f: F) -> Tryable
     where
         Self: Sized,
-        R: Try<Ok = bool, Error = E>,
+        R: Try<Ok = bool, Error = Tryable::Error>,
         F: FnMut(&Self::Item) -> R,
     {
         let done = self.try_for_each(move |x| match f(&x).into_result() {
@@ -41,15 +39,16 @@ pub trait TryFindExt<E>: Iterator {
         }
         .transpose();
         match result {
-            Ok(x) => Self::Result::from_ok(x),
-            Err(x) => Self::Result::from_error(x),
+            Ok(x) => Tryable::from_ok(x),
+            Err(x) => Tryable::from_error(x),
         }
     }
 }
 
-impl<I: Iterator<Item = Item>, Item, E> TryFindExt<E> for I {
-    type Result = Result<Option<Item>, E>;
-}
+/// We only provide gneeric implementation for Result type to make the API
+/// usable without requiring use to provide the type at every use to
+/// disambiguate the inferrence and allow for elegant use with `?` operator.
+impl<I: Iterator<Item = Item>, Item, E> TryFindExt<Result<Option<Item>, E>> for I {}
 
 #[test]
 fn test_try_find() {
